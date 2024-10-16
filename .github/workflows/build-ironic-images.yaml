@@ -33,8 +33,8 @@ jobs:
         working-directory: ironic-images
       - name: Build the IPA image
         run: bash keekz-ubuntu-extras.sh
-        env:
-          ELEMENTS_PATH: ${{ env.pythonLocation }}/share/ironic-python-agent-builder/dib:${{ github.workspace }}/ironic-images/custom_elements
+        # env:
+        #   ELEMENTS_PATH: ${{ env.pythonLocation }}/share/ironic-python-agent-builder/dib:${{ github.workspace }}/ironic-images/custom_elements
       - name: Dynamically set timestamp environment variable
         run: echo "TIMESTAMP=$(date +"%Y%m%d%H%M%S")" >> $GITHUB_ENV
       - run: ls ironic-images
