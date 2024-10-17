@@ -1,5 +1,5 @@
 ---
-name: build-ironic-images
+name: build-ironic-images-publish
 
 on:
   workflow_dispatch:
@@ -53,22 +53,50 @@ jobs:
           fi
         working-directory: "${{ matrix.image.name == 'ubuntu' && format('ironic-images/{0}', matrix.image.name) || format('ironic-images/{0}', matrix.image.release) }}"
         env:
-          # OS_VERSION variable used in ironic-images/ubuntu/ubuntu.sh
           OS_VERSION: ${{ matrix.image.release }}
           ELEMENTS_PATH: "${{ matrix.image.name == 'ubuntu' && '' || format('{0}/share/ironic-python-agent-builder/dib:{1}/ironic-images/custom_elements', env.pythonLocation, github.workspace) }}"
 
-      - name: Set timestamp environment variable
-        run: echo "TIMESTAMP=$(git show --no-patch --no-notes --pretty='%cd' --date=format:'%Y%m%d%H%M%S' ${{ github.sha }})" >>  $GITHUB_ENV
+      - name: Collect Artifacts
+        run: |
+          mkdir -p artifacts
+          [ -f ${{ env.initramfs_file }} ] && cp ${{ env.initramfs_file }} artifacts/ || true
+          [ -f ${{ env.kernel_file }} ] && cp ${{ env.kernel_file }} artifacts/ || true
+          [ -f ${{ env.qcow2_file }} ] && cp ${{ env.qcow2_file }} artifacts/ || true
+
+      - name: Upload Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.image.name }}-artifacts
+          path: artifacts/*
+
+  publish-release:
+    needs: [build]
+    permissions:
+      contents: write  # for softprops/action-gh-release to create GitHub release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Dynamically set timestamp environment variable
+        run: echo "TIMESTAMP=$(date +"%Y%m%d%H%M%S")" >> $GITHUB_ENV
+
+      - name: Download Ubuntu Artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: ubuntu-artifacts
+          path: downloaded/
+
+      - name: Download Debian Artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: debian-artifacts
+          path: downloaded/
 
       - name: Publish Release
+        id: create_release
         uses: softprops/action-gh-release@c062e08bd532815e2082a85e87e3ef29c3e6d191 # v2
         with:
           name: undercloud-ironic-ipa
           tag_name: undercloud-ironic-ipa-${{ env.TIMESTAMP }}
           make_latest: true
           fail_on_unmatched_files: true
-          files: |
-            ${{ env.qcow2_file }}
-            ${{ env.initramfs_file }}
-            ${{ env.kernel_file }}
+          files: downloaded/*
         if: ${{ github.ref == 'refs/heads/main' }}
