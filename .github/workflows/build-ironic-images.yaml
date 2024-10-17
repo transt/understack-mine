@@ -93,7 +93,8 @@ jobs:
           make_latest: true
           fail_on_unmatched_files: true
           files: |
-            ironic-images/ipa-debian-bookworm/ipa-debian-bookworm.initramfs
-            ironic-images/ipa-debian-bookworm/ipa-debian-bookworm.kernel
-            ironic-images/keekz-ubuntu-extras/keekz-ubuntu-extras.qcow2
+            ipa-debian-bookworm/ipa-debian-bookworm.initramfs
+            ipa-debian-bookworm/ipa-debian-bookworm.kernel
+            keekz-ubuntu-extras/keekz-ubuntu-extras.qcow2
+        working-directory: ironic-images
         if: ${{ github.ref == 'refs/heads/main' }} && steps.ubuntu.outcome == 'success' && steps.debian.outcome == 'success'
