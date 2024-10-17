@@ -16,37 +16,37 @@ on:
 
 jobs:
 
-  build-keeks-images:
-    runs-on: ubuntu-latest
-    defaults:
-     run:
-       working-directory: ironic-images/keekz-ubuntu-extras
-    steps:
-      - uses: actions/checkout@eef61447b9ff4aafe5dcd4e0bbf5d482be7e7871 # v4
-      - uses: actions/setup-python@f677139bbe7f9c59b41e40162b753c062f5d49a3 # v5
-        id: setup-python
-        with:
-          python-version: '3.11'
-          cache: 'pip'
-      - run: sudo apt update && sudo apt install -y debootstrap qemu-utils squashfs-tools kpartx
-      - run: pip install -r requirements.txt
-        working-directory: ironic-images
-      - name: Build the IPA image
-        run: bash keekz-ubuntu-extras.sh
-      - name: Dynamically set timestamp environment variable
-        run: echo "TIMESTAMP=$(date +"%Y%m%d%H%M%S")" >> $GITHUB_ENV
-      - run: pwd && ls -ltra
-      - name: Publish IPA Release
-        uses: softprops/action-gh-release@c062e08bd532815e2082a85e87e3ef29c3e6d191 # v2
-        with:
-          name: undercloud-ironic-ipa
-          tag_name: undercloud-ironic-ipa-${{ env.TIMESTAMP }}
-          make_latest: true
-          fail_on_unmatched_files: true
-          files: |
-            ironic-images/keekz-ubuntu-extras/ipa-debian-bookworm.initramfs
-            ironic-images/keekz-ubuntu-extras/ipa-debian-bookworm.kernel
-        if: ${{ github.ref == 'refs/heads/main' }}
+  # build-keeks-images:
+  #   runs-on: ubuntu-latest
+  #   defaults:
+  #    run:
+  #      working-directory: ironic-images/keekz-ubuntu-extras
+  #   steps:
+  #     - uses: actions/checkout@eef61447b9ff4aafe5dcd4e0bbf5d482be7e7871 # v4
+  #     - uses: actions/setup-python@f677139bbe7f9c59b41e40162b753c062f5d49a3 # v5
+  #       id: setup-python
+  #       with:
+  #         python-version: '3.11'
+  #         cache: 'pip'
+  #     - run: sudo apt update && sudo apt install -y debootstrap qemu-utils squashfs-tools kpartx
+  #     - run: pip install -r requirements.txt
+  #       working-directory: ironic-images
+  #     - name: Build the IPA image
+  #       run: bash keekz-ubuntu-extras.sh
+  #     - name: Dynamically set timestamp environment variable
+  #       run: echo "TIMESTAMP=$(date +"%Y%m%d%H%M%S")" >> $GITHUB_ENV
+  #     - run: pwd && ls -ltra
+  #     - name: Publish IPA Release
+  #       uses: softprops/action-gh-release@c062e08bd532815e2082a85e87e3ef29c3e6d191 # v2
+  #       with:
+  #         name: undercloud-ironic-ipa
+  #         tag_name: undercloud-ironic-ipa-${{ env.TIMESTAMP }}
+  #         make_latest: true
+  #         fail_on_unmatched_files: true
+  #         files: |
+  #           ironic-images/keekz-ubuntu-extras/ipa-debian-bookworm.initramfs
+  #           ironic-images/keekz-ubuntu-extras/ipa-debian-bookworm.kernel
+  #       if: ${{ github.ref == 'refs/heads/main' }}
   # build-ironic-images:
   #   runs-on: ubuntu-latest
   #   defaults:
@@ -79,3 +79,94 @@ jobs:
   #           ironic-images/ipa-debian-bookworm/ipa-debian-bookworm.initramfs
   #           ironic-images/ipa-debian-bookworm/ipa-debian-bookworm.kernel
   #       if: ${{ github.ref == 'refs/heads/main' }}
+  #
+
+  build:
+    runs-on: ubuntu-latest
+
+    strategy:
+      matrix:
+        os:
+          - ubuntu   keekz-ubuntu-extras
+          - debian   ipa-debian-bookworm
+ 
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@eef61447b9ff4aafe5dcd4e0bbf5d482be7e7871 # v4
+
+      - name: Setup python environment
+        uses: actions/setup-python@f677139bbe7f9c59b41e40162b753c062f5d49a3 # v5
+          id: setup-python
+          with:
+            python-version: '3.11'
+            cache: 'pip'
+
+      - name: Install Dependencies
+        run: sudo apt update && sudo apt install -y debootstrap qemu-utils squashfs-tools kpartx
+
+      - name: Install python packages
+        run: pip install -r requirements.txt
+        working-directory: ironic-images
+
+    - name: Build Ubuntu Image
+      if: matrix.os == 'ubuntu'
+      run: |
+        bash keekz-ubuntu-extras.sh
+        ls -latr
+
+        # Upload image
+        # curl -X POST "${{ secrets.CROSSPLANE_API_URL }}/upload" \
+        # -H "Authorization: Bearer secrets.$CROSSPLANE_API_TOKEN" \
+        # -F "file=@${IMAGE_FILE}" \
+        # -F "name=${IMAGE_NAME}" \
+        # -F "type=qcow2"
+
+        # rm -rf "${IMAGE_NAME}"
+      working-directory: ironic-images/keekz-ubuntu-extras
+
+    - name: Build Debian Ironic Image
+      if: matrix.os == 'debian'
+      run: |
+        bash ipa-debian-bookworm.sh                                                                                                                                                                                                                      
+        ls -latr
+
+        # Upload image
+        # curl -X POST "${{ secrets.CROSSPLANE_API_URL }}/upload" \
+        # -H "Authorization: Bearer $CROSSPLANE_API_TOKEN" \
+        # -F "file=@${IMAGE_NAME}-initrd" \
+        # -F "name=${IMAGE_NAME}-initrd" \
+        # -F "type=initramfs"
+
+        # curl -X POST "${{ secrets.CROSSPLANE_API_URL }}/upload" \
+        # -H "Authorization: Bearer $CROSSPLANE_API_TOKEN" \
+        # -F "file=@${IMAGE_NAME}-kernel" \
+        # -F "name=${IMAGE_NAME}-kernel" \
+        # -F "type=kernel"
+
+        # rm -rf "${IMAGE_NAME}"
+      env:
+        ELEMENTS_PATH: ${{ env.pythonLocation }}/share/ironic-python-agent-builder/dib:${{ github.workspace }}/ironic-images/custom_elements
+      working-directory: ironic-images/ipa-debian-bookworm
+
+    - name: Dynamically set timestamp environment variable
+      run: echo "TIMESTAMP=$(date +"%Y%m%d%H%M%S")" >> $GITHUB_ENV
+
+    - name: Publish Release
+      uses: softprops/action-gh-release@c062e08bd532815e2082a85e87e3ef29c3e6d191 # v2
+      with:
+        name: undercloud-ironic-ipa
+        tag_name: undercloud-ironic-ipa-${{ env.TIMESTAMP }}
+        make_latest: true
+        fail_on_unmatched_files: true
+        files: |
+          ironic-images/ipa-debian-bookworm/ipa-debian-bookworm.initramfs
+          ironic-images/ipa-debian-bookworm/ipa-debian-bookworm.kernel
+      if: ${{ github.ref == 'refs/heads/main' }} && matrix.os == 'debian'
+      with:
+        name: undercloud-ubuntu
+        tag_name: undercloud-ubuntu-${{ env.TIMESTAMP }}
+        make_latest: true
+        fail_on_unmatched_files: true                                                                                                                                                                                                                    
+        files: |
+          ironic-images/keekz-ubuntu-extras/keekz-ubuntu-extras.qcow2
+      if: ${{ github.ref == 'refs/heads/main' }} && matrix.os == 'debian'
