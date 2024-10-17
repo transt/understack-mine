@@ -86,7 +86,6 @@ jobs:
         run: echo "TIMESTAMP=$(date +"%Y%m%d%H%M%S")" >> $GITHUB_ENV
 
       - name: Publish Release
-        if: steps.ubuntu.outcome == 'success' && steps.debian.outcome == 'success'
         uses: softprops/action-gh-release@c062e08bd532815e2082a85e87e3ef29c3e6d191 # v2
         with:
           name: undercloud-ironic-ipa
@@ -97,4 +96,4 @@ jobs:
             ironic-images/ipa-debian-bookworm/ipa-debian-bookworm.initramfs
             ironic-images/ipa-debian-bookworm/ipa-debian-bookworm.kernel
             ironic-images/keekz-ubuntu-extras/keekz-ubuntu-extras.qcow2
-        if: ${{ github.ref == 'refs/heads/main' }}
+        if: ${{ github.ref == 'refs/heads/main' }} && steps.ubuntu.outcome == 'success' && steps.debian.outcome == 'success'
