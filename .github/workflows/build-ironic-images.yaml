@@ -93,12 +93,5 @@ jobs:
           files: |
             ironic-images/ipa-debian-bookworm/ipa-debian-bookworm.initramfs
             ironic-images/ipa-debian-bookworm/ipa-debian-bookworm.kernel
-        if: ${{ github.ref == 'refs/heads/main' }} && matrix.os == 'debian'
-        with:
-          name: undercloud-ubuntu
-          tag_name: undercloud-ubuntu-${{ env.TIMESTAMP }}
-          make_latest: true
-          fail_on_unmatched_files: true                                                                                                                                                                                                                    
-          files: |
             ironic-images/keekz-ubuntu-extras/keekz-ubuntu-extras.qcow2
-        if: ${{ github.ref == 'refs/heads/main' }} && matrix.os == 'debian'
+        if: ${{ github.ref == 'refs/heads/main' }}
