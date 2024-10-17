@@ -19,9 +19,11 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        os:
-          - ubuntu
-          - debian
+        image:
+          - name: "ubuntu"
+            script: "keekz-ubuntu-extras"
+          - name: "debian"
+            script: "ipa-debian-bookworm"
     steps:
       - name: Checkout repository
         uses: actions/checkout@eef61447b9ff4aafe5dcd4e0bbf5d482be7e7871 # v4
@@ -40,50 +42,26 @@ jobs:
         run: pip install -r requirements.txt
         working-directory: ironic-images
 
-      - name: Build Ubuntu Image
-        id: ubuntu
-        if: matrix.os == 'ubuntu'
+      - name: Build Image
         run: |
-          bash keekz-ubuntu-extras.sh
+          bash "${{ matrix.image.script }}".sh
+          pwd
           ls -latr
-
-          # Upload image
-          # curl -X POST "${{ secrets.CROSSPLANE_API_URL }}/upload" \
-          # -H "Authorization: Bearer secrets.$CROSSPLANE_API_TOKEN" \
-          # -F "file=@${IMAGE_FILE}" \
-          # -F "name=${IMAGE_NAME}" \
-          # -F "type=qcow2"
-
-          # rm -rf "${IMAGE_NAME}"
-        working-directory: ironic-images/keekz-ubuntu-extras
-
-      - name: Build Debian Ironic Image
-        id: debian
-        if: matrix.os == 'debian'
-        run: |
-          bash ipa-debian-bookworm.sh                                                                                                                                                                                                                      
-          ls -latr
-
-          # Upload image
-          # curl -X POST "${{ secrets.CROSSPLANE_API_URL }}/upload" \
-          # -H "Authorization: Bearer $CROSSPLANE_API_TOKEN" \
-          # -F "file=@${IMAGE_NAME}-initrd" \
-          # -F "name=${IMAGE_NAME}-initrd" \
-          # -F "type=initramfs"
-
-          # curl -X POST "${{ secrets.CROSSPLANE_API_URL }}/upload" \
-          # -H "Authorization: Bearer $CROSSPLANE_API_TOKEN" \
-          # -F "file=@${IMAGE_NAME}-kernel" \
-          # -F "name=${IMAGE_NAME}-kernel" \
-          # -F "type=kernel"
-
-          # rm -rf "${IMAGE_NAME}"
+          if [ "${{ matrix.image.name }}" == "ubuntu" ]; then
+            echo "qcow2_file=ironic-images/${{ matrix.image.script }}/${{ matrix.image.script }}.qcow2" >> $GITHUB_ENV
+          elif [ "${{ matrix.image.name }}" == "debian" ]; then
+            echo "initramfs_file=ironic-images/${{ matrix.image.script }}/${{ matrix.image.script }}.initramfs" >> $GITHUB_ENV
+            echo "kernel_file=ironic-images/${{ matrix.image.script }}/${{ matrix.image.script }}.kernel" >> $GITHUB_ENV
+          fi
+        working-directory: "ironic-images/${{ matrix.image.script }}"
         env:
           ELEMENTS_PATH: ${{ env.pythonLocation }}/share/ironic-python-agent-builder/dib:${{ github.workspace }}/ironic-images/custom_elements
-        working-directory: ironic-images/ipa-debian-bookworm
 
-      - name: Dynamically set timestamp environment variable
-        run: echo "TIMESTAMP=$(date +"%Y%m%d%H%M%S")" >> $GITHUB_ENV
+      - name: Get commit hash
+        run: echo "COMMIT_HASH=$(git rev-parse --short HEAD)" >> $GITHUB_ENV
+
+      - name: Set timestamp environment variable
+        run: echo "TIMESTAMP=$(git show --no-patch --no-notes --pretty='%cd' --date=format:'%Y%m%d%H%M%S' ${{ env.COMMIT_HASH }})" >>  $GITHUB_ENV
 
       - name: Publish Release
         uses: softprops/action-gh-release@c062e08bd532815e2082a85e87e3ef29c3e6d191 # v2
@@ -93,8 +71,7 @@ jobs:
           make_latest: true
           fail_on_unmatched_files: true
           files: |
-            ipa-debian-bookworm/ipa-debian-bookworm.initramfs
-            ipa-debian-bookworm/ipa-debian-bookworm.kernel
-            keekz-ubuntu-extras/keekz-ubuntu-extras.qcow2
-        working-directory: ironic-images
-        if: ${{ github.ref == 'refs/heads/main' }} && steps.ubuntu.outcome == 'success' && steps.debian.outcome == 'success'
+            ${{ env.qcow2_file }}
+            ${{ env.initramfs_file }}
+            ${{ env.kernel_file }}
+        if: ${{ github.ref == 'refs/heads/main' }}
