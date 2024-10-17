@@ -41,6 +41,7 @@ jobs:
         working-directory: ironic-images
 
       - name: Build Ubuntu Image
+        id: ubuntu
         if: matrix.os == 'ubuntu'
         run: |
           bash keekz-ubuntu-extras.sh
@@ -57,6 +58,7 @@ jobs:
         working-directory: ironic-images/keekz-ubuntu-extras
 
       - name: Build Debian Ironic Image
+        id: debian
         if: matrix.os == 'debian'
         run: |
           bash ipa-debian-bookworm.sh                                                                                                                                                                                                                      
@@ -84,6 +86,7 @@ jobs:
         run: echo "TIMESTAMP=$(date +"%Y%m%d%H%M%S")" >> $GITHUB_ENV
 
       - name: Publish Release
+        if: steps.ubuntu.outcome == 'success' && steps.debian.outcome == 'success'
         uses: softprops/action-gh-release@c062e08bd532815e2082a85e87e3ef29c3e6d191 # v2
         with:
           name: undercloud-ironic-ipa
