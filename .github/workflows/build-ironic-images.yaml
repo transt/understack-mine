@@ -87,8 +87,8 @@ jobs:
     strategy:
       matrix:
         os:
-          - ubuntu   keekz-ubuntu-extras
-          - debian   ipa-debian-bookworm
+          - ubuntu
+          - debian
  
     steps:
       - name: Checkout repository
