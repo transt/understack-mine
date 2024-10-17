@@ -1,0 +1,76 @@
+---
+name: build-ironic-images-NEW
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - 'ironic-images/**'
+  push:
+    branches:
+      - main
+    paths:
+      - 'ironic-images/**'
+  merge_group:
+    types: [checks_requested]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        image:
+          - name: "ubuntu"
+            release: "noble"
+            script: "ubuntu.sh"
+          - name: "ipa"
+            release: "ipa-debian-bookworm"
+            script: "ipa-debian-bookworm.sh"
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@eef61447b9ff4aafe5dcd4e0bbf5d482be7e7871 # v4
+
+      - name: Setup python environment
+        uses: actions/setup-python@f677139bbe7f9c59b41e40162b753c062f5d49a3 # v5
+        id: setup-python
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install Dependencies
+        run: sudo apt update && sudo apt install -y debootstrap qemu-utils squashfs-tools kpartx
+
+      - name: Install python packages
+        run: pip install -r requirements.txt
+        working-directory: ironic-images
+
+      - name: Build Images
+        run: |
+          bash ${{ matrix.image.script }}
+          ls -la ..
+          pwd
+          ls -la
+          mkdir -p ../upload
+          if [ "${{ matrix.image.name }}" == "ubuntu" ]; then
+            cp "${{ matrix.image.name }}-${{ matrix.image.release }}.qcow2" ../upload
+          elif [ "${{ matrix.image.name }}" == "ipa" ]; then
+            cp "${{ matrix.image.release }}.initramfs" ../upload
+            cp "${{ matrix.image.release }}.kernel" ../upload
+          fi
+        working-directory: "ironic-images/${{ matrix.image.name }}"
+        env:
+          OS_VERSION: ${{ matrix.image.release }}
+          ELEMENTS_PATH: "${{ matrix.image.name == 'ubuntu' && '' || format('{0}/share/ironic-python-agent-builder/dib:{1}/ironic-images/custom_elements', env.pythonLocation, github.workspace) }}"
+
+      - name: Set timestamp environment variable
+        run: echo "TIMESTAMP=$(git show --no-patch --no-notes --pretty='%cd' --date=format:'%Y%m%d%H%M%S' ${{ github.sha }})" >>  $GITHUB_ENV
+
+      - name: Publish Release
+        uses: softprops/action-gh-release@c062e08bd532815e2082a85e87e3ef29c3e6d191 # v2
+        with:
+          name: undercloud-ironic-ipa
+          tag_name: undercloud-ironic-ipa-${{ env.TIMESTAMP }}
+          make_latest: true
+          fail_on_unmatched_files: true
+          files: ironic-images/upload/*
+        if: ${{ github.ref == 'refs/heads/main' }}
