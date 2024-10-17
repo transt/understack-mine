@@ -40,65 +40,65 @@ jobs:
         run: pip install -r requirements.txt
         working-directory: ironic-images
 
-    - name: Build Ubuntu Image
-      if: matrix.os == 'ubuntu'
-      run: |
-        bash keekz-ubuntu-extras.sh
-        ls -latr
+      - name: Build Ubuntu Image
+        if: matrix.os == 'ubuntu'
+        run: |
+          bash keekz-ubuntu-extras.sh
+          ls -latr
 
-        # Upload image
-        # curl -X POST "${{ secrets.CROSSPLANE_API_URL }}/upload" \
-        # -H "Authorization: Bearer secrets.$CROSSPLANE_API_TOKEN" \
-        # -F "file=@${IMAGE_FILE}" \
-        # -F "name=${IMAGE_NAME}" \
-        # -F "type=qcow2"
+          # Upload image
+          # curl -X POST "${{ secrets.CROSSPLANE_API_URL }}/upload" \
+          # -H "Authorization: Bearer secrets.$CROSSPLANE_API_TOKEN" \
+          # -F "file=@${IMAGE_FILE}" \
+          # -F "name=${IMAGE_NAME}" \
+          # -F "type=qcow2"
 
-        # rm -rf "${IMAGE_NAME}"
-      working-directory: ironic-images/keekz-ubuntu-extras
+          # rm -rf "${IMAGE_NAME}"
+        working-directory: ironic-images/keekz-ubuntu-extras
 
-    - name: Build Debian Ironic Image
-      if: matrix.os == 'debian'
-      run: |
-        bash ipa-debian-bookworm.sh                                                                                                                                                                                                                      
-        ls -latr
+      - name: Build Debian Ironic Image
+        if: matrix.os == 'debian'
+        run: |
+          bash ipa-debian-bookworm.sh                                                                                                                                                                                                                      
+          ls -latr
 
-        # Upload image
-        # curl -X POST "${{ secrets.CROSSPLANE_API_URL }}/upload" \
-        # -H "Authorization: Bearer $CROSSPLANE_API_TOKEN" \
-        # -F "file=@${IMAGE_NAME}-initrd" \
-        # -F "name=${IMAGE_NAME}-initrd" \
-        # -F "type=initramfs"
+          # Upload image
+          # curl -X POST "${{ secrets.CROSSPLANE_API_URL }}/upload" \
+          # -H "Authorization: Bearer $CROSSPLANE_API_TOKEN" \
+          # -F "file=@${IMAGE_NAME}-initrd" \
+          # -F "name=${IMAGE_NAME}-initrd" \
+          # -F "type=initramfs"
 
-        # curl -X POST "${{ secrets.CROSSPLANE_API_URL }}/upload" \
-        # -H "Authorization: Bearer $CROSSPLANE_API_TOKEN" \
-        # -F "file=@${IMAGE_NAME}-kernel" \
-        # -F "name=${IMAGE_NAME}-kernel" \
-        # -F "type=kernel"
+          # curl -X POST "${{ secrets.CROSSPLANE_API_URL }}/upload" \
+          # -H "Authorization: Bearer $CROSSPLANE_API_TOKEN" \
+          # -F "file=@${IMAGE_NAME}-kernel" \
+          # -F "name=${IMAGE_NAME}-kernel" \
+          # -F "type=kernel"
 
-        # rm -rf "${IMAGE_NAME}"
-      env:
-        ELEMENTS_PATH: ${{ env.pythonLocation }}/share/ironic-python-agent-builder/dib:${{ github.workspace }}/ironic-images/custom_elements
-      working-directory: ironic-images/ipa-debian-bookworm
+          # rm -rf "${IMAGE_NAME}"
+        env:
+          ELEMENTS_PATH: ${{ env.pythonLocation }}/share/ironic-python-agent-builder/dib:${{ github.workspace }}/ironic-images/custom_elements
+        working-directory: ironic-images/ipa-debian-bookworm
 
-    - name: Dynamically set timestamp environment variable
-      run: echo "TIMESTAMP=$(date +"%Y%m%d%H%M%S")" >> $GITHUB_ENV
+      - name: Dynamically set timestamp environment variable
+        run: echo "TIMESTAMP=$(date +"%Y%m%d%H%M%S")" >> $GITHUB_ENV
 
-    - name: Publish Release
-      uses: softprops/action-gh-release@c062e08bd532815e2082a85e87e3ef29c3e6d191 # v2
-      with:
-        name: undercloud-ironic-ipa
-        tag_name: undercloud-ironic-ipa-${{ env.TIMESTAMP }}
-        make_latest: true
-        fail_on_unmatched_files: true
-        files: |
-          ironic-images/ipa-debian-bookworm/ipa-debian-bookworm.initramfs
-          ironic-images/ipa-debian-bookworm/ipa-debian-bookworm.kernel
-      if: ${{ github.ref == 'refs/heads/main' }} && matrix.os == 'debian'
-      with:
-        name: undercloud-ubuntu
-        tag_name: undercloud-ubuntu-${{ env.TIMESTAMP }}
-        make_latest: true
-        fail_on_unmatched_files: true                                                                                                                                                                                                                    
-        files: |
-          ironic-images/keekz-ubuntu-extras/keekz-ubuntu-extras.qcow2
-      if: ${{ github.ref == 'refs/heads/main' }} && matrix.os == 'debian'
+      - name: Publish Release
+        uses: softprops/action-gh-release@c062e08bd532815e2082a85e87e3ef29c3e6d191 # v2
+        with:
+          name: undercloud-ironic-ipa
+          tag_name: undercloud-ironic-ipa-${{ env.TIMESTAMP }}
+          make_latest: true
+          fail_on_unmatched_files: true
+          files: |
+            ironic-images/ipa-debian-bookworm/ipa-debian-bookworm.initramfs
+            ironic-images/ipa-debian-bookworm/ipa-debian-bookworm.kernel
+        if: ${{ github.ref == 'refs/heads/main' }} && matrix.os == 'debian'
+        with:
+          name: undercloud-ubuntu
+          tag_name: undercloud-ubuntu-${{ env.TIMESTAMP }}
+          make_latest: true
+          fail_on_unmatched_files: true                                                                                                                                                                                                                    
+          files: |
+            ironic-images/keekz-ubuntu-extras/keekz-ubuntu-extras.qcow2
+        if: ${{ github.ref == 'refs/heads/main' }} && matrix.os == 'debian'
