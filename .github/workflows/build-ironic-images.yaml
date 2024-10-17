@@ -19,9 +19,11 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        os:
-          - ubuntu
-          - debian
+        image:
+          - name: "ubuntu"
+            release: "noble"
+          - name: "debian"
+            release: "ipa-debian-bookworm"
     steps:
       - name: Checkout repository
         uses: actions/checkout@eef61447b9ff4aafe5dcd4e0bbf5d482be7e7871 # v4
@@ -40,61 +42,61 @@ jobs:
         run: pip install -r requirements.txt
         working-directory: ironic-images
 
-      - name: Build Ubuntu Image
-        id: ubuntu
-        if: matrix.os == 'ubuntu'
+      - name: Build Images
         run: |
-          bash keekz-ubuntu-extras.sh
-          ls -latr
-
-          # Upload image
-          # curl -X POST "${{ secrets.CROSSPLANE_API_URL }}/upload" \
-          # -H "Authorization: Bearer secrets.$CROSSPLANE_API_TOKEN" \
-          # -F "file=@${IMAGE_FILE}" \
-          # -F "name=${IMAGE_NAME}" \
-          # -F "type=qcow2"
-
-          # rm -rf "${IMAGE_NAME}"
-        working-directory: ironic-images/keekz-ubuntu-extras
-
-      - name: Build Debian Ironic Image
-        id: debian
-        if: matrix.os == 'debian'
-        run: |
-          bash ipa-debian-bookworm.sh                                                                                                                                                                                                                      
-          ls -latr
-
-          # Upload image
-          # curl -X POST "${{ secrets.CROSSPLANE_API_URL }}/upload" \
-          # -H "Authorization: Bearer $CROSSPLANE_API_TOKEN" \
-          # -F "file=@${IMAGE_NAME}-initrd" \
-          # -F "name=${IMAGE_NAME}-initrd" \
-          # -F "type=initramfs"
-
-          # curl -X POST "${{ secrets.CROSSPLANE_API_URL }}/upload" \
-          # -H "Authorization: Bearer $CROSSPLANE_API_TOKEN" \
-          # -F "file=@${IMAGE_NAME}-kernel" \
-          # -F "name=${IMAGE_NAME}-kernel" \
-          # -F "type=kernel"
-
-          # rm -rf "${IMAGE_NAME}"
+          bash "${{ matrix.image.name == 'ubuntu' && format('{0}.sh', matrix.image.name) || format('{0}.sh', matrix.image.release) }}"
+          if [ "${{ matrix.image.name }}" == "ubuntu" ]; then
+            echo "qcow2_file=ironic-images/${{ matrix.image.name }}/${{ matrix.image.name }}-${{ matrix.image.release }}.qcow2" >> $GITHUB_ENV
+          elif [ "${{ matrix.image.name }}" == "debian" ]; then
+            echo "initramfs_file=ironic-images/${{ matrix.image.release }}/${{ matrix.image.release }}.initramfs" >> $GITHUB_ENV
+            echo "kernel_file=ironic-images/${{ matrix.image.release }}/${{ matrix.image.release }}.kernel" >> $GITHUB_ENV
+          fi
+        working-directory: "${{ matrix.image.name == 'ubuntu' && format('ironic-images/{0}', matrix.image.name) || format('ironic-images/{0}', matrix.image.release) }}"
         env:
-          ELEMENTS_PATH: ${{ env.pythonLocation }}/share/ironic-python-agent-builder/dib:${{ github.workspace }}/ironic-images/custom_elements
-        working-directory: ironic-images/ipa-debian-bookworm
+          OS_VERSION: ${{ matrix.image.release }}
+          ELEMENTS_PATH: "${{ matrix.image.name == 'ubuntu' && '' || format('{0}/share/ironic-python-agent-builder/dib:{1}/ironic-images/custom_elements', env.pythonLocation, github.workspace) }}"
 
+      - name: Collect Artifacts
+        run: |
+          mkdir -p artifacts
+          cp ${{ env.initramfs_file }} artifacts/ || true
+          cp ${{ env.kernel_file }} artifacts/ || true
+          cp ${{ env.qcow2_file }} artifacts/ || true
+
+      - name: Upload Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.image.name }}-artifacts
+          path: artifacts/*
+
+  publish-release:
+    needs: [build]
+    permissions:
+      contents: write  # for softprops/action-gh-release to create GitHub release
+    runs-on: ubuntu-latest
+    steps:
       - name: Dynamically set timestamp environment variable
         run: echo "TIMESTAMP=$(date +"%Y%m%d%H%M%S")" >> $GITHUB_ENV
 
+      - name: Download Ubuntu Artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: ubuntu-artifacts
+          path: downloaded/
+
+      - name: Download Debian Artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: debian-artifacts
+          path: downloaded/
+
       - name: Publish Release
+        id: create_release
         uses: softprops/action-gh-release@c062e08bd532815e2082a85e87e3ef29c3e6d191 # v2
         with:
           name: undercloud-ironic-ipa
           tag_name: undercloud-ironic-ipa-${{ env.TIMESTAMP }}
           make_latest: true
           fail_on_unmatched_files: true
-          files: |
-            ipa-debian-bookworm/ipa-debian-bookworm.initramfs
-            ipa-debian-bookworm/ipa-debian-bookworm.kernel
-            keekz-ubuntu-extras/keekz-ubuntu-extras.qcow2
-        working-directory: ironic-images
-        if: ${{ github.ref == 'refs/heads/main' }} && steps.ubuntu.outcome == 'success' && steps.debian.outcome == 'success'
+          files: downloaded/*
+        if: ${{ github.ref == 'refs/heads/main' }}
