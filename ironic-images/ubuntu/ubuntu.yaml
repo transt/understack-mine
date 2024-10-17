@@ -1,4 +1,4 @@
-- imagename: keekz-ubuntu-extras
+- imagename: ubuntu-noble
   elements:
   - ubuntu
   - grub2
